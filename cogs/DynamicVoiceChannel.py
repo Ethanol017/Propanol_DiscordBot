@@ -60,7 +60,8 @@ class DynamicVoiceChannel(commands.Cog):
         with open('DynamicVoiceNotificationList.json', 'r+', encoding='utf-8') as f:
                 data = json.load(f)
                 data.setdefault(str(member.id),[])
-                data[str(member.id)].append(interaction.user.id)
+                if interaction.user.id not in data[str(member.id)]:
+                    data[str(member.id)].append(interaction.user.id)
                 f.seek(0)
                 json.dump(data, f, indent=4, separators=(',', ': '))
                 f.truncate()
