@@ -16,4 +16,4 @@ test.py
 
 # Sensitive files
 config.ini
-activity.json
+*.json
