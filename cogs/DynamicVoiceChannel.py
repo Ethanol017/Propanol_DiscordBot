@@ -47,7 +47,6 @@ class DynamicVoiceChannel(commands.Cog):
             data = json.load(f)
             notification_list = data[str(member.id)]
         notification_str = " ".join(f"<@{x}>" for x in notification_list)
-        print(notification_str)
         if notification_str == "":
             notification_str = "無"
         embed.add_field(name="通知", value=notification_str, inline=False)
