@@ -70,10 +70,14 @@ class DynamicVoiceChannel(commands.Cog):
     async def unsubscription(self,interaction: discord.Interaction, member: discord.Member):
         with open('DynamicVoiceNotificationList.json', 'r+', encoding='utf-8') as f:
                 data = json.load(f)
-                data[str(member.id)].remove(interaction.user.id)
+                data.setdefault(str(member.id),[])
+                if interaction.user.id in data[str(member.id)] :
+                    data[str(member.id)].remove(interaction.user.id)
+                    await interaction.response.send_message('設置成功',ephemeral=True)
+                else:
+                    await interaction.response.send_message('設置失敗:原本並無訂閱',ephemeral=True)
                 f.seek(0)
                 json.dump(data, f, indent=4, separators=(',', ': '))
                 f.truncate()
-        await interaction.response.send_message('設置成功',ephemeral=True)
 async def setup(bot):
     await bot.add_cog(DynamicVoiceChannel(bot))
