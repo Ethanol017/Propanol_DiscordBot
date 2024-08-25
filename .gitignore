@@ -1,0 +1,19 @@
+# Editors
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+test.py
+
+# Sensitive files
+config.ini
+activity.json
