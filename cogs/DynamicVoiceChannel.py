@@ -6,7 +6,7 @@ import datetime
 import json
 
 class DynamicVoiceChannel(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot:commands.Bot):
         self.bot = bot
         
         self.config = configparser.ConfigParser()
@@ -78,5 +78,15 @@ class DynamicVoiceChannel(commands.Cog):
                 f.seek(0)
                 json.dump(data, f, indent=4, separators=(',', ': '))
                 f.truncate()
+    @app_commands.command(name="顯示訂閱清單")    
+    async def show_list(self,interaction: discord.Interaction):
+        with open('DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            result_list = []
+            for key,value in data.items():
+                if interaction.user.id in value:
+                    result_list.append(key)
+        await interaction.response.send_message('## 訂閱列表: \n'+'\n'.join([ interaction.guild.get_member(int(id)).display_name for id in result_list]),ephemeral=True)
+        
 async def setup(bot):
     await bot.add_cog(DynamicVoiceChannel(bot))
