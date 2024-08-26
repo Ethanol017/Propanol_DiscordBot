@@ -39,8 +39,8 @@ class DynamicVoiceChannel(commands.Cog):
                 await self.bot.wait_for('voice_state_update', check=check)
                 await new_channel.delete()
 
-    async def create_notification(self, guild : discord.Guild ,member,channel_mention):
-        embed = discord.Embed(title="語音頻道創建", description="", color=0x30D5C8)
+    async def create_notification(self, guild : discord.Guild ,member: discord.Member,channel_mention:str):
+        embed = discord.Embed(title=f"{member.display_name}創建了語音頻道", description="", color=0x30D5C8)
         embed.add_field(name="頻道", value=channel_mention, inline=True)
         embed.add_field(name="創建者", value=member.display_name, inline=True)
         with open('DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
