@@ -26,7 +26,7 @@ class CustomActivity(commands.GroupCog,name="activity"):
             self.add_item(self.text)
             
         async def on_submit(self, interaction: discord.Interaction):
-            with open('activity.json', 'r+', encoding='utf-8') as f:
+            with open('data/activity.json', 'r+', encoding='utf-8') as f:
                 data = json.load(f)
                 data[str(interaction.user.id)] = self.text.value.splitlines()
                 f.seek(0)
@@ -36,7 +36,7 @@ class CustomActivity(commands.GroupCog,name="activity"):
     
     @app_commands.command(description="修改或添加\"乙醇機器人\"活動的欄隨機內容(僅能修改自己的內容)")
     async def modify(self,interaction: discord.Interaction):
-        with open('activity.json', 'r+', encoding='utf-8') as f:
+        with open('data/activity.json', 'r+', encoding='utf-8') as f:
             data = json.load(f)
         await interaction.response.send_modal(self.ModifyModal(name=f"{interaction.user.name}",content= "\n".join(data.setdefault(str(interaction.user.id),[]))))
 

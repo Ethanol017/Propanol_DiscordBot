@@ -43,7 +43,7 @@ class DynamicVoiceChannel(commands.Cog):
         embed = discord.Embed(title=f"{member.display_name}創建了語音頻道", description="", color=0x30D5C8)
         embed.add_field(name="頻道", value=channel_mention, inline=True)
         embed.add_field(name="創建者", value=member.display_name, inline=True)
-        with open('DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
+        with open('data/DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
             notification_list = data[str(member.id)]
         notification_str = " ".join(f"<@{x}>" for x in notification_list)
@@ -56,7 +56,7 @@ class DynamicVoiceChannel(commands.Cog):
     
     @app_commands.command(name='訂閱語音通知')
     async def subscription(self,interaction: discord.Interaction, member: discord.Member):
-        with open('DynamicVoiceNotificationList.json', 'r+', encoding='utf-8') as f:
+        with open('data/DynamicVoiceNotificationList.json', 'r+', encoding='utf-8') as f:
                 data = json.load(f)
                 data.setdefault(str(member.id),[])
                 if (interaction.user.id not in data[str(member.id)]) and (member.id != interaction.user.id):
@@ -67,7 +67,7 @@ class DynamicVoiceChannel(commands.Cog):
         await interaction.response.send_message('設置成功',ephemeral=True)
     @app_commands.command(name='取消訂閱語音通知')
     async def unsubscription(self,interaction: discord.Interaction, member: discord.Member):
-        with open('DynamicVoiceNotificationList.json', 'r+', encoding='utf-8') as f:
+        with open('data/DynamicVoiceNotificationList.json', 'r+', encoding='utf-8') as f:
                 data = json.load(f)
                 data.setdefault(str(member.id),[])
                 if interaction.user.id in data[str(member.id)] :
@@ -80,7 +80,7 @@ class DynamicVoiceChannel(commands.Cog):
                 f.truncate()
     @app_commands.command(name="顯示訂閱清單")    
     async def show_list(self,interaction: discord.Interaction):
-        with open('DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
+        with open('data/DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
             result_list = []
             for key,value in data.items():
