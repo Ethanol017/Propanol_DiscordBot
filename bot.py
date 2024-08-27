@@ -3,12 +3,9 @@ from discord import app_commands
 from discord.ext import commands
 import os
 from typing import Literal, Optional
-from dotenv import load_dotenv
+import configparser
 
 def run():
-    dotenv_path = '.env'
-    load_dotenv(dotenv_path)
-    
     intents = discord.Intents.all()
     bot = commands.Bot(intents=intents,command_prefix="!!")
     @bot.event
@@ -92,10 +89,8 @@ def run():
     reload.autocomplete('extension')(cog_autocomplete)
     #endregion
 
-    
-    import configparser
     config = configparser.ConfigParser()
-    config.read('config.ini')
+    config.read('data\config.ini')
     bot.run(config['Global'].get('TOKEN'))
      
 if __name__ == "__main__":

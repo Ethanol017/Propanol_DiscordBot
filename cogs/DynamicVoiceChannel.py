@@ -10,7 +10,7 @@ class DynamicVoiceChannel(commands.Cog):
         self.bot = bot
         
         self.config = configparser.ConfigParser()
-        self.config.read('config.ini')
+        self.config.read('data\config.ini')
         self.channel_ID = self.config['DynamicVoiceChannel'].getint('channel_ID')
 
     @commands.Cog.listener()
