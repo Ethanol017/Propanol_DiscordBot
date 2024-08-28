@@ -5,17 +5,39 @@ import json
 
 class CustomActivity(commands.GroupCog,name="activity"):
     def __init__(self, bot:commands.Bot):
-        self.bot:commands.Bot = bot
+        self.bot: commands.Bot = bot
+        with open('data/activity.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            self.recover = data["recover"]
+        bot.loop.create_task(self.set_presence())
+
+    async def set_presence(self):
+        if self.recover != "":
+            await self.bot.wait_until_ready()
+            await self.bot.change_presence(activity=discord.CustomActivity(name=self.recover))
         
     @app_commands.command()
     @commands.is_owner()
     async def set(self,interaction: discord.Interaction,content:str):
+        with open('data/activity.json', 'r+', encoding='utf-8') as f:
+            data = json.load(f)
+            data["recover"] = content
+            f.seek(0)
+            json.dump(data, f, indent=4, separators=(',', ': '))
+            f.truncate()
+            print(data["recover"])
         await self.bot.change_presence(activity=discord.CustomActivity(name=content))
         await interaction.response.send_message('設置成功',ephemeral=True)
     
     @app_commands.command()
     @commands.is_owner()
     async def clear(self,interaction: discord.Interaction):
+        with open('data/activity.json', 'r+', encoding='utf-8') as f:
+            data = json.load(f)
+            data["recover"] = ""
+            f.seek(0)
+            json.dump(data, f, indent=4, separators=(',', ': '))
+            f.truncate()
         await self.bot.change_presence(activity=None)
         await interaction.response.send_message('設置成功',ephemeral=True)
     

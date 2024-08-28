@@ -90,7 +90,7 @@ def run():
     #endregion
 
     config = configparser.ConfigParser()
-    config.read('data\config.ini')
+    config.read('data/config.ini')
     bot.run(config['Global'].get('TOKEN'))
      
 if __name__ == "__main__":
