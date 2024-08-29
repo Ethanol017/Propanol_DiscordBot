@@ -12,39 +12,36 @@ class DynamicVoiceChannel(commands.Cog):
         self.config = configparser.ConfigParser()
         self.config.read('data/config.ini')
         self.channel_ID = self.config['DynamicVoiceChannel'].getint('channel_ID')
+        self.channel_list = []
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if before.channel != after.channel:
-            if after.channel and after.channel.id == self.channel_ID:  
+            if after.channel and after.channel.id == self.channel_ID:  # create
                 guild = member.guild
                 category = after.channel.category  
                 if category is None:
                     return
-                
                 overwrites = category.overwrites  
-
                 new_channel = await guild.create_voice_channel(
                     f"{member.display_name}的頻道",
                     overwrites=overwrites,
                     category=category  
                 )
+                self.channel_list.append(new_channel)
+                print(self.channel_list)
                 await self.create_notification(guild,member,new_channel.mention)
-
                 await member.move_to(new_channel)
-
-                def check(a, b, c):
-                    return len(new_channel.members) == 0  
-
-                await self.bot.wait_for('voice_state_update', check=check)
-                await new_channel.delete()
-
+            elif before.channel and before.channel in self.channel_list and len(before.channel.members) == 0:  # delete
+                await before.channel.delete()
+             
     async def create_notification(self, guild : discord.Guild ,member: discord.Member,channel_mention:str):
         embed = discord.Embed(title=f"{member.display_name}創建了語音頻道", description="", color=0x30D5C8)
         embed.add_field(name="頻道", value=channel_mention, inline=True)
         embed.add_field(name="創建者", value=member.display_name, inline=True)
         with open('data/DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
+            data.setdefault(str(member.id),[])
             notification_list = data[str(member.id)]
         notification_str = " ".join(f"<@{x}>" for x in notification_list)
         if notification_str == "":
