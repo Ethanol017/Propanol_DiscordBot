@@ -11,27 +11,30 @@ class DynamicVoiceChannel(commands.Cog):
         
         self.config = configparser.ConfigParser()
         self.config.read('data/config.ini')
-        self.channel_ID = self.config['DynamicVoiceChannel'].getint('channel_ID')
-        self.channel_list = []
+        with open('data/DynamicVoice.json', 'r', encoding='utf-8') as f:
+            self.channels = json.load(f)
+        self.remove_channels = []
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if before.channel != after.channel:
-            if after.channel and after.channel.id == self.channel_ID:  # create
+            channel_ID = self.channels[str(member.guild.id)][0]
+            if after.channel and after.channel.id == channel_ID:  # create
                 guild = member.guild
-                category = after.channel.category  
+                category = after.channel.category
                 if category is None:
                     return
-                overwrites = category.overwrites  
+                overwrites = category.overwrites
                 new_channel = await guild.create_voice_channel(
                     f"{member.display_name}的頻道",
                     overwrites=overwrites,
-                    category=category  
+                    category=category
                 )
-                self.channel_list.append(new_channel)
+                self.remove_channels.append(new_channel)
                 await self.create_notification(guild,member,new_channel.mention)
                 await member.move_to(new_channel)
-            elif before.channel and before.channel in self.channel_list and len(before.channel.members) == 0:  # delete
+            elif before.channel and before.channel in self.remove_channels and len(before.channel.members) == 0:  # delete
+                self.remove_channels.remove(before.channel)
                 await before.channel.delete()
              
     async def create_notification(self, guild : discord.Guild ,member: discord.Member,channel_mention:str):
@@ -40,23 +43,23 @@ class DynamicVoiceChannel(commands.Cog):
         embed.add_field(name="創建者", value=member.display_name, inline=True)
         with open('data/DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
-            data.setdefault(str(member.id),[])
-            notification_list = data[str(member.id)]
+            data[str(guild.id)].setdefault(str(member.id),[])
+            notification_list = data[str(guild.id)][str(member.id)]
         notification_str = " ".join(f"<@{x}>" for x in notification_list)
         if notification_str == "":
             notification_str = "無"
         embed.add_field(name="通知", value=notification_str, inline=False)
         embed.timestamp = datetime.datetime.now(datetime.UTC)
-        channelID = self.config['DynamicVoiceChannel'].getint('notification_Channel')
+        channelID = self.channels[str(guild.id)][1]
         await guild.get_channel(channelID).send(embed=embed)
     
     @app_commands.command(name='訂閱語音通知')
     async def subscription(self,interaction: discord.Interaction, member: discord.Member):
         with open('data/DynamicVoiceNotificationList.json', 'r+', encoding='utf-8') as f:
                 data = json.load(f)
-                data.setdefault(str(member.id),[])
-                if (interaction.user.id not in data[str(member.id)]) and (member.id != interaction.user.id):
-                    data[str(member.id)].append(interaction.user.id)
+                data[str(interaction.guild.id)].setdefault(str(member.id),[])
+                if (interaction.user.id not in data[str(interaction.guild.id)][str(member.id)]) and (member.id != interaction.user.id):
+                    data[str(interaction.guild.id)][str(member.id)].append(interaction.user.id)
                 f.seek(0)
                 json.dump(data, f, indent=4, separators=(',', ': '))
                 f.truncate()
@@ -65,9 +68,9 @@ class DynamicVoiceChannel(commands.Cog):
     async def unsubscription(self,interaction: discord.Interaction, member: discord.Member):
         with open('data/DynamicVoiceNotificationList.json', 'r+', encoding='utf-8') as f:
                 data = json.load(f)
-                data.setdefault(str(member.id),[])
-                if interaction.user.id in data[str(member.id)] :
-                    data[str(member.id)].remove(interaction.user.id)
+                data[str(interaction.guild.id)].setdefault(str(member.id),[])
+                if interaction.user.id in data[str(interaction.guild.id)][str(member.id)] :
+                    data[str(interaction.guild.id)][str(member.id)].remove(interaction.user.id)
                     await interaction.response.send_message('設置成功',ephemeral=True)
                 else:
                     await interaction.response.send_message('設置失敗:原本並無訂閱',ephemeral=True)
@@ -79,7 +82,7 @@ class DynamicVoiceChannel(commands.Cog):
         with open('data/DynamicVoiceNotificationList.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
             result_list = []
-            for key,value in data.items():
+            for key,value in data[str(interaction.guild.id)].items():
                 if interaction.user.id in value:
                     result_list.append(key)
         await interaction.response.send_message('## 訂閱列表: \n'+'\n'.join([ interaction.guild.get_member(int(id)).display_name for id in result_list]),ephemeral=True)
