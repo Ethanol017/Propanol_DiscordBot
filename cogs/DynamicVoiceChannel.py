@@ -31,7 +31,8 @@ class DynamicVoiceChannel(commands.Cog):
                     category=category
                 )
                 self.remove_channels.append(new_channel)
-                await self.create_notification(guild,member,new_channel.mention)
+                if self.channels[str(member.guild.id)][1] != -1:
+                    await self.create_notification(guild,member,new_channel.mention)
                 await member.move_to(new_channel)
             elif before.channel and before.channel in self.remove_channels and len(before.channel.members) == 0:  # delete
                 self.remove_channels.remove(before.channel)
