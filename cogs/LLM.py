@@ -1,4 +1,5 @@
 import json
+import re
 from typing import List
 import discord
 from discord.ext import commands
@@ -19,6 +20,16 @@ def load_json_as_dict(filepath="data/chat_history.json"):
         data = json.load(f)
     return data
 
+def check_text_replace_to_display(guild:discord.guild.Guild,text):
+    pattern = r"<@(\d+)>"
+    def repl(m):
+        print(int(m.group(1)))
+        user = guild.get_member(int(m.group(1)))
+        if user is not None:
+            return f"@{user.display_name}"
+    new_text = re.sub(pattern, repl, text)
+    return new_text
+
 get_chat_history_declaration = {
     "name": "get_chat_history",
     "description": "取得聊天室過去的對話紀錄",
@@ -33,11 +44,10 @@ get_chat_history_declaration = {
         "required": ["limit"]
     }
 }
-async def get_chat_history(channel:discord.channel.VoiceChannel,limit=10)-> List[str]:
-    print(channel)
+async def get_chat_history(channel,limit=10)-> List[str]:
     history = []
     async for message in channel.history(limit=limit):
-        history.append(f"{message.author.display_name}:{message.content}")
+        history.append(f"{message.author.display_name}:{check_text_replace_to_display(channel.guild,message.content)}")
     history.reverse()
     print(history)
     return history
@@ -89,7 +99,8 @@ class LLM(commands.GroupCog):
                         ),
                         history=load_json_as_dict()
                     )
-                response = await self.chat.send_message(f"{message.author.display_name}:{message.content.replace(self.bot.user.mention, '')}")
+                message_send = check_text_replace_to_display(message.guild,message.content.replace(self.bot.user.mention, ''))
+                response = await self.chat.send_message(f"{message.author.display_name}:{message_send}")
                 print(f"function_calls: {response.function_calls}")
                 if response.function_calls is not None:
                     for tool_call in response.function_calls:
