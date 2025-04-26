@@ -1,4 +1,5 @@
 import json
+from typing import List
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -9,18 +10,7 @@ from google.genai import types
 
 
 def export_history_to_json(history, filepath="data/chat_history.json"):
-    result = []
-
-    for item in history:
-        parts = []
-        for part in item.parts:
-            if hasattr(part, "text") and part.text:
-                parts.append({"text": part.text})
-        result.append({
-            "role": item.role,
-            "parts": parts
-        })
-
+    result = [content.to_json_dict() for content in history]
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
         
@@ -28,6 +18,29 @@ def load_json_as_dict(filepath="data/chat_history.json"):
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
+
+get_chat_history_declaration = {
+    "name": "get_chat_history",
+    "description": "取得聊天室過去的對話紀錄",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "limit": {
+                "type": "integer",
+                "description": "想要取得的對話紀錄數量"
+            }
+        },
+        "required": ["limit"]
+    }
+}
+async def get_chat_history(channel:discord.channel.VoiceChannel,limit=10)-> List[str]:
+    print(channel)
+    history = []
+    async for message in channel.history(limit=limit):
+        history.append(f"{message.author.display_name}:{message.content}")
+    history.reverse()
+    print(history)
+    return history
 
 class LLM(commands.GroupCog):
     def __init__(self, bot:commands.Bot):
@@ -37,6 +50,7 @@ class LLM(commands.GroupCog):
         GOOGLE_TOKEN = config['Global'].get('GOOGLE_TOKEN')
         self.client = genai.Client(api_key=GOOGLE_TOKEN)
         self.chat : AsyncChat = None
+        self.tools = types.Tool(function_declarations=[get_chat_history_declaration])
 
     
     @commands.Cog.listener()
@@ -52,18 +66,20 @@ class LLM(commands.GroupCog):
             async with message.channel.typing():
                 if self.chat is None:
                     self.chat = self.client.aio.chats.create(
-                        model="gemini-2.0-flash-lite",
+                        model="gemini-2.0-flash",
                         config=types.GenerateContentConfig(
                             max_output_tokens=200,
                             temperature=0.2,
+                            tools=[self.tools],
                             system_instruction=[
                                 "你現在扮演一位具有以下特質的人，並以繁體中文回應",
                                 "角色設定：女性朋友，名字叫「丙醇」，是我們很要好的朋友",
-                                "主要語氣：隨意一點不要太活潑浮誇，使用第一人稱，對其他人可以用「你我他」的稱呼",
+                                "性格：溫柔、幽默",
+                                "主要語氣：隨意一點，不要太活潑浮誇，使用第一人稱，對其他人可以用「你我他」的稱呼",
                                 "偶爾使用一點 emoji 或貼圖文字，但不要太多五花八門的不同 emoji 或貼圖文字",
                                 "不用問候語或是確認問題(例如「XXX問我什麼哦?」)",
-                                "可以偶爾幽默的吐槽人和調侃人",
-                                "可以用髒話當感嘆或語助詞，但不能無原無故罵人"
+                                "可以偶爾吐槽人或調侃人",
+                                "可以用髒話當感嘆或語助詞，但不要太過火"
                                 "可以使用流行語或網路用詞",
                                 "語句停頓處可以換行",
                                 "以朋友口吻聊天，不要過度正式或條列式回覆",
@@ -74,6 +90,18 @@ class LLM(commands.GroupCog):
                         history=load_json_as_dict()
                     )
                 response = await self.chat.send_message(f"{message.author.display_name}:{message.content.replace(self.bot.user.mention, '')}")
+                print(f"function_calls: {response.function_calls}")
+                if response.function_calls is not None:
+                    for tool_call in response.function_calls:
+                        if tool_call.name == "get_chat_history":
+                            result = await get_chat_history(message.channel,**tool_call.args)
+                            print(f"Function execution result: {result}")
+                        
+                        function_response_part = types.Part.from_function_response(
+                            name=tool_call.name,
+                            response={"result": result},
+                        )
+                        response = await self.chat.send_message(function_response_part)
                 export_history_to_json(self.chat.get_history())
                 await message.channel.send(response.text)
             
