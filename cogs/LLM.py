@@ -115,7 +115,23 @@ class LLM(commands.GroupCog):
                         response = await self.chat.send_message(function_response_part)
                 export_history_to_json(self.chat.get_history())
                 await message.channel.send(response.text)
-            
-
+    
+    
+    @app_commands.command()
+    async def join(self,interaction: discord.Interaction):
+        if interaction.user.voice:
+            channel = interaction.user.voice.channel
+            await channel.connect()
+            await interaction.response.send_message("Connected to voice channel",ephemeral=True)
+        else:
+            await interaction.response.send_message("User did't in voice channel",ephemeral=True)
+    @app_commands.command()
+    async def leave(self,interaction: discord.Interaction):
+        if len(self.bot.voice_clients)>0:
+            for voice_client in self.bot.voice_clients:
+                await voice_client.disconnect()
+            await interaction.response.send_message("Disconnect to voice channel",ephemeral=True)
+        else:
+            await interaction.response.send_message("Bot did't in voice channel",ephemeral=True)
 async def setup(bot):
     await bot.add_cog(LLM(bot))
