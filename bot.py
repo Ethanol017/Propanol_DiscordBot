@@ -14,6 +14,7 @@ def run():
 
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py'):
+                print(f"Find {filename} and loading...")
                 await bot.load_extension(f'cogs.{filename[:-3]}')
 
     
@@ -91,7 +92,7 @@ def run():
 
     config = configparser.ConfigParser()
     config.read('data/config.ini')
-    bot.run(config['Global'].get('TOKEN'))
+    bot.run(config['Global'].get('DISCORD_TOKEN'))
      
 if __name__ == "__main__":
     run() 
