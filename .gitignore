@@ -17,3 +17,7 @@ test.py
 # Sensitive files
 config.ini
 *.json
+
+# Date
+date/*.json
+logs/
