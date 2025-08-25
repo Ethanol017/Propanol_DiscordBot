@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import os
 from typing import Literal, Optional
-import configparser
+from dotenv import load_dotenv
 
 def run():
     intents = discord.Intents.all()
@@ -89,10 +89,9 @@ def run():
         await interaction.response.send_message(f'Reloaded {extension}', ephemeral=True)
     reload.autocomplete('extension')(cog_autocomplete)
     #endregion
-
-    config = configparser.ConfigParser()
-    config.read('data/config.ini')
-    bot.run(config['Global'].get('DISCORD_TOKEN'))
+    
+    load_dotenv()
+    bot.run(os.getenv("DISCORD_TOKEN"))
      
 if __name__ == "__main__":
     run() 

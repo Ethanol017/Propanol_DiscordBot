@@ -15,7 +15,7 @@ env/
 test.py
 
 # Sensitive files
-config.ini
+.env
 *.json
 
 # Date

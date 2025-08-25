@@ -4,7 +4,8 @@ from typing import List
 import discord
 from discord.ext import commands
 from discord import app_commands
-import configparser
+import os
+from dotenv import load_dotenv
 from google import genai
 from google.genai.chats import AsyncChat
 from google.genai import types
@@ -55,10 +56,8 @@ async def get_chat_history(channel,limit=10)-> List[str]:
 class LLM(commands.GroupCog):
     def __init__(self, bot:commands.Bot):
         self.bot: commands.Bot = bot
-        config = configparser.ConfigParser()
-        config.read('data/config.ini')
-        GOOGLE_TOKEN = config['Global'].get('GOOGLE_TOKEN')
-        self.client = genai.Client(api_key=GOOGLE_TOKEN)
+        load_dotenv()
+        self.client = genai.Client(api_key=os.getenv("GOOGLE_TOKEN"))
         self.chat : AsyncChat = None
         self.tools = types.Tool(function_declarations=[get_chat_history_declaration])
 
