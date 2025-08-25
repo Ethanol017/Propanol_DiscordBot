@@ -13,6 +13,23 @@
 #### 自訂機器人活動
 使用指令修該改機器人名字底下的活動自訂義修改，添加了復原機制，重啟機器人後會自動復原活動。
 
+### Minecraft Server
+使用指令開關Minecraft伺服器  
+主機緣故，同時間只能開一種伺服器，指令內有限定之能一台運行
+```
+/mc start '伺服器名稱'
+/mc stop  
+```
+- 只能跑一台，所以stop不用選擇  
+>`伺服器名稱`和`伺服器啟動路徑`需在`data/MCServer.json`內添加  
+指令將讀取JSON，以表單選擇伺服器
+
+### 丙醇聊天LLM
+@丙醇 以文字聊天  
+僅支援全文字  
+使用 [Google Gemini API](https://ai.google.dev/)
+
+
 ## 其他指令
 #### 加載Cog
 實現了在機器人啟動狀態下自動尋找到Cogs資料夾內的cog，並做成Discord選擇框，以方便加載、卸載、重載。
@@ -20,5 +37,9 @@
 https://about.abstractumbra.dev/discord.py/2023/01/29/sync-command-example.html
 
 ## 待作清單
+- [ ]  MC Server State指令
+- [ ]  LLM 支援語音聊天(Gemini Live)、Mem0記憶
+---
+### 暫時擱置 
 - [ ]  動態語音刪除時，將語音聊天室以討論串的方式存到其他頻道
 - [ ]  添加隨機自訂狀態 (隨機清單添加指令已完成)
