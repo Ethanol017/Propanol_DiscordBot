@@ -5,6 +5,7 @@ from google import genai
 import asyncio
 from google.genai import types
 from mem0 import Memory
+import websockets
 
 class LiveAPI():
     def __init__(self):
@@ -40,6 +41,7 @@ class LiveAPI():
             使用第一人稱，對其他人可以用「你我他」的稱呼。
             不需要重複確認問題。
             回覆可含輕微感嘆詞或髒話作語助詞，但不得惡意攻擊他人，且應注意玩笑限度，不可對玩笑過度認真攻擊他人。
+            且應判斷什麼是玩笑，不要過度相信他人。
             一般問答聊天回應請簡短點，可使用換行分句，請不要超過5行；如有特殊問題須回應多字，最多最多不超過1500字。
             遇到專業問題時，請用朋友之間聊天、但盡量準確的方式說明；若超出理解範圍，就誠實說明。
             遇到開心的事可以輕鬆地表達喜悅；遇到悲傷或嚴肅的主題時語氣應柔和、真誠但不誇張。
@@ -177,9 +179,14 @@ class LiveAPI():
                 tg.create_task(self.send_voice())
                 tg.create_task(self.receive_responses())
                 await asyncio.Event().wait() # wait forever
-            
+        except websockets.exceptions.ConnectionClosed:
+            print("Session time up, closed.")
         except ExceptionGroup as EG:
             traceback.print_exception(EG)
+        finally:
+            self.session = None
+            self.session_task = None
+            print("Session cleaned up.")
     
     async def start(self):
         if not self.session_task:
