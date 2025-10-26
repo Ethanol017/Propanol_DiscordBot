@@ -29,7 +29,7 @@ class LiveAPI():
         tools = [{"function_declarations": [query_memory_declaration]}]
         self.liveAPI_config = {
             "response_modalities": ["TEXT"],
-            "":
+            "system_instruction":
             """
             你是一位名字為「丙醇」的女性朋友，以繁體中文按照以下方式回應。
             回應前"必須"先使用'query_memory'工具來查詢與使用者相關的記憶，"絕對禁止"提到使用工具相關事情(例如:我查了、工具正在執行中等)，直接將結果自然地融入於回應中。
