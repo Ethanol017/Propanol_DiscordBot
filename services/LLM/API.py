@@ -77,29 +77,30 @@ class LiveAPI():
         self.on_text_chunk = None
         self.generation_complete = asyncio.Event()
         self.generation_complete.set() # default : completed
-        def get_memories(user_id):
-            memories = self.memory.get_all(user_id=user_id)
-            return [m['memory'] for m in memories['results']]
-        print("TEST Memories:")
-        for m in get_memories(user_id="乙醇"):
-            print(f"- {m}")
-        print("-----")
+        # TEST TOOL: get all memories
+        # def get_memories(user_id):
+        #     memories = self.memory.get_all(user_id=user_id)
+        #     return [m['memory'] for m in memories['results']]
+        # print("TEST Memories:")
+        # for m in get_memories(user_id="乙醇"):
+        #     print(f"- {m}")
+        # print("-----")
 
     def query_memory(self, query: str, user_id: str) -> dict:
-        print("TESTLOG : query_memory called with query:", query, "user_id:", user_id)
+        # print("TESTLOG : query_memory called with query:", query, "user_id:", user_id)
         memories = self.memory.search(query, user_id=user_id)
         if memories.get('results', []):
             memory_list = memories['results']
             sorted_memories = sorted(memory_list, key=lambda x: x['score'], reverse=True)[:5]  # top 5
             memory_context = "\n".join([f"- {mem['memory']}" for mem in sorted_memories])
-            print("TESTLOG : query_memory found memories:", memory_context)
+            # print("TESTLOG : query_memory found memories:", memory_context)
             return {"記憶": memory_context}
         return {"記憶": "沒有找到相關記憶。"}
 
     
     def save_memory(self, content: str, user_id: str) -> dict:
         """Save important information to memory"""
-        print("TESTLOG : Saving to memory for user_id:", user_id)
+        # print("TESTLOG : Saving to memory for user_id:", user_id)
         self.memory.add(content, user_id=user_id)
 
     async def send_text(self,user_name:str,text:str):
@@ -132,7 +133,7 @@ class LiveAPI():
                         await self.on_text_chunk(text,is_final=False)
                     continue
                 if chunk.tool_call:
-                    print("TESTLOG : Tool call received:", chunk.tool_call)
+                    # print("TESTLOG : Tool call received:", chunk.tool_call)
                     function_responses = []
                     for fc in chunk.tool_call.function_calls:
                         if fc.name == "query_memory":
