@@ -21,3 +21,4 @@ test.py
 # Date
 date/*.json
 logs/
+*.db

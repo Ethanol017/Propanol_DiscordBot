@@ -50,8 +50,8 @@ class LLM(commands.GroupCog):
             return
 
         if self.bot.user in message.mentions:
-            named_message = message.author.display_name+ ":" + self.mentions_to_usernames(message.guild,message.content)
-            print(f"TESTLOG : Received message: {named_message}")
+            named_message = self.mentions_to_usernames(message.guild,message.content)
+            print(f"TESTLOG : Received message: {message.author.display_name}:{named_message}")
             await self.live_api.start()
             # wait for last generation complete
             await self.live_api.generation_complete.wait()
@@ -61,7 +61,7 @@ class LLM(commands.GroupCog):
                 self.last_edit_time = 0
                 
                 self.live_api.on_text_chunk = self.handle_text_chunk
-                await self.live_api.send_text(named_message)
+                await self.live_api.send_text(message.author.display_name,named_message)
                 # wait for first chunk
                 while not self.buffer:
                     await asyncio.sleep(0.1)
