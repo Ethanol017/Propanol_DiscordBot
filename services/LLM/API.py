@@ -69,10 +69,11 @@ class LiveAPI():
                 "provider": "qdrant",
                 "config": {
                     "embedding_model_dims": 768,
-                    "on_disk": True
+                    "on_disk": True,
+                    "path": "services/LLM/mem0/qdrant_data"
                 }
             },
-            "history_db_path": "services/LLM/history.db"
+            "history_db_path": "services/LLM/mem0/history.db"
         }
         self.memory = Memory.from_config(self.mem0_config)
         self.session_task = None
