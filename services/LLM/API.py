@@ -75,6 +75,7 @@ class LiveAPI():
             },
             "history_db_path": "services/LLM/mem0/history.db"
         }
+        self.mem_run_id = "chat-bot"
         self.memory = Memory.from_config(self.mem0_config)
         self.session_task = None
         self.on_text_chunk = None
@@ -89,22 +90,22 @@ class LiveAPI():
         #     print(f"- {m}")
         # print("-----")
 
-    def query_memory(self, query: str, user_id: str) -> dict:
+    def query_memory(self, query: str) -> dict:
         # print("TESTLOG : query_memory called with query:", query, "user_id:", user_id)
-        memories = self.memory.search(query, user_id=user_id)
+        memories = self.memory.search(query, run_id=self.mem_run_id,limit=5)
         if memories.get('results', []):
-            memory_list = memories['results']
-            sorted_memories = sorted(memory_list, key=lambda x: x['score'], reverse=True)[:5]  # top 5
-            memory_context = "\n".join([f"- {mem['memory']}" for mem in sorted_memories])
+            print("TESTLOG : query_memory found memories:", memories['results'])
+            memory_context = "\n".join([f"- {mem['memory']}" for mem in memories['results']])
             # print("TESTLOG : query_memory found memories:", memory_context)
             return {"記憶": memory_context}
         return {"記憶": "沒有找到相關記憶。"}
 
     
-    def save_memory(self, content: str, user_id: str) -> dict:
+    def save_memory(self, role:str,name:str,content: str) -> dict:
         """Save important information to memory"""
         # print("TESTLOG : Saving to memory for user_id:", user_id)
-        self.memory.add(content, user_id=user_id)
+        msg = {"role": role, "name": name, "content": content}
+        self.memory.add([msg], run_id=self.mem_run_id, infer=False)
 
     async def send_text(self,user_name:str,text:str):
         self.generation_complete.clear()
@@ -133,14 +134,14 @@ class LiveAPI():
                     print(text)
                     if self.on_text_chunk:
                         # callback of editing message to send text chunk
-                        await self.on_text_chunk(text,is_final=False)
+                        await self.on_text_chunk(text,is_final=True)
                     continue
                 if chunk.tool_call:
                     # print("TESTLOG : Tool call received:", chunk.tool_call)
                     function_responses = []
                     for fc in chunk.tool_call.function_calls:
                         if fc.name == "query_memory":
-                            result = self.query_memory(**fc.args,user_id=self.now_user)
+                            result = self.query_memory(**fc.args)
                         else:
                             print("Unknown function:", fc.name)
                             result = {"error": "Unknown function"}
@@ -155,8 +156,8 @@ class LiveAPI():
             self.generation_complete.set()
             if self.now_user_text and response_text:
                 # Save to memory only if there's user input and response
-                self.save_memory([{"role": "user", "content": self.now_user_text},
-                                  {"role": "assistant", "content": response_text}], user_id=self.now_user)
+                self.save_memory("user",self.now_user,self.now_user_text)
+                self.save_memory("assistant","assistant",response_text)
                 self.now_user_text = "" # reset after saving
             # print("TESTLOG : Turn complete.")
             
