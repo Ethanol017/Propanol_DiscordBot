@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import os
 import traceback
 from dotenv import load_dotenv
@@ -89,18 +90,38 @@ class LiveAPI():
         # for m in get_memories(user_id="乙醇"):
         #     print(f"- {m}")
         # print("-----")
+    def get_relative_time(self,past_datetime_str):
+        """Convert a past datetime string to a relative time description in Chinese."""
+        # mem0 儲存的是 UTC 時間
+        past_datetime = datetime.fromisoformat(past_datetime_str)
+        now = datetime.now(past_datetime.tzinfo)
+        delta = now - past_datetime
+
+        seconds = delta.total_seconds()
+        if seconds < 60:
+            return "幾秒鐘前"
+        elif seconds < 3600:
+            return f"{int(seconds / 60)} 分鐘前"
+        elif seconds < 86400:
+            return f"{int(seconds / 3600)} 小時前"
+        elif seconds < 604800:
+            return f"{int(seconds / 86400)} 天前"
+        elif seconds < 2592000:
+            return f"{int(seconds / 604800)} 週前"
+        else:
+            return "很久以前"
 
     def query_memory(self, query: str) -> dict:
         # print("TESTLOG : query_memory called with query:", query, "user_id:", user_id)
-        memories = self.memory.search(query, run_id=self.mem_run_id,limit=5)
-        if memories.get('results', []):
-            print("TESTLOG : query_memory found memories:", memories['results'])
-            memory_context = "\n".join([f"- {mem['memory']}" for mem in memories['results']])
-            # print("TESTLOG : query_memory found memories:", memory_context)
-            return {"記憶": memory_context}
-        return {"記憶": "沒有找到相關記憶。"}
+        memories = self.memory.search(query, run_id=self.mem_run_id,limit=5)['results']
+        # print("TESTLOG : query_memory found memories:", memories)
+        memory_context = ""
+        for mem in memories:
+            relative_time = self.get_relative_time(mem['updated_at'] if mem['updated_at'] else mem['created_at'])
+            memory_context += f"- ({relative_time}) {mem['memory']}\n"
+        # print("TESTLOG : query_memory found memories:", memory_context)
+        return {"記憶": memory_context} if memory_context else {"記憶": "沒有找到相關記憶。"}
 
-    
     def save_memory(self, role:str,name:str,content: str) -> dict:
         """Save important information to memory"""
         # print("TESTLOG : Saving to memory for user_id:", user_id)
