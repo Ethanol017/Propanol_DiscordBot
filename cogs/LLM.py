@@ -14,15 +14,18 @@ class LLM(commands.GroupCog):
         
         # Text Init
         self.buffer = ""
+        self.chunk = 0
+        self.START_CHUNK = 2 # start sending after n chunks
         self.current_message = None
         self.last_edit_time = 0
     
     async def handle_text_chunk(self, text: str,is_final: bool = False):
+        self.chunk += 1
         self.buffer += text
         # edit rate limit
         current_time = asyncio.get_event_loop().time()
         # print(f"TESTLOG : Received text chunk: {text} (final: {is_final} current_time: {current_time})\n")
-        if current_time - self.last_edit_time < self.EDIT_RATE and not is_final:
+        if (self.chunk >= self.START_CHUNK or current_time - self.last_edit_time < self.EDIT_RATE) and not is_final:
             return
         
         if self.current_message:
@@ -57,13 +60,14 @@ class LLM(commands.GroupCog):
             await self.live_api.generation_complete.wait()
             async with message.channel.typing():
                 self.buffer = ""
+                self.chunk = 0
                 self.current_message = None
                 self.last_edit_time = 0
                 
                 self.live_api.on_text_chunk = self.handle_text_chunk
                 await self.live_api.send_text(message.author.display_name,named_message)
-                # wait for first chunk
-                while not self.buffer:
+                # wait for chunk
+                while self.chunk < self.START_CHUNK:
                     await asyncio.sleep(0.1)
                 self.current_message = await message.channel.send(self.buffer)
                 
