@@ -149,23 +149,28 @@ class LiveAPI():
     async def receive_responses(self):
         while True: # TaskGroup
             self.is_generating = True
-            turn = self.session.receive()
             response_text = ""
-            async for chunk in turn:
-                if data := chunk.data: # audio
-                    self.audio_out.put_nowait(data)
-                    continue
-                if text := chunk.text: # text
-                    response_text += text
-                    print(text)
-                    if self.on_text_chunk:
-                        # callback of editing message to send text chunk
-                        await self.on_text_chunk(text,is_final=True)
-                    continue
-                if chunk.tool_call:
+            async for response in self.session.receive():
+                # print(response.model_dump_json())
+                # audio
+                if response.server_content and response.server_content.model_turn and response.server_content.model_turn.parts and hasattr(response.server_content.model_turn.parts[0], 'data'):
+                    if data := response.server_content.model_turn.parts[0].data:
+                        self.audio_out.put_nowait(data)
+                        continue
+                # text
+                if response.server_content and response.server_content.model_turn and response.server_content.model_turn.parts and hasattr(response.server_content.model_turn.parts[0], 'text'):
+                    if text := response.server_content.model_turn.parts[0].text:
+                        response_text += text
+                        print(text)
+                        if self.on_text_chunk:
+                            # callback of editing message to send text chunk
+                            await self.on_text_chunk(text,is_final=True)
+                        continue
+                # tool calls (memory)
+                if response.tool_call:
                     # print("TESTLOG : Tool call received:", chunk.tool_call)
                     function_responses = []
-                    for fc in chunk.tool_call.function_calls:
+                    for fc in response.tool_call.function_calls:
                         if fc.name == "query_memory":
                             result = self.query_memory(**fc.args)
                         else:
@@ -177,9 +182,9 @@ class LiveAPI():
                             response=result
                         )
                         function_responses.append(function_response)
-
                     await self.session.send_tool_response(function_responses=function_responses)
             self.generation_complete.set()
+            # save to memory
             if self.now_user_text and response_text:
                 # Save to memory only if there's user input and response
                 self.save_memory("user",self.now_user,self.now_user_text)
