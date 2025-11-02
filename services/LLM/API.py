@@ -13,33 +13,34 @@ class LiveAPI():
         load_dotenv()
         self.client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
         self.liveAPI_model = "models/gemini-2.0-flash-live-001"
+        self.previous_session_handle = None
         # self.CONFIG = {"response_modalities": ["AUDIO"]}
         query_memory_declaration  = {
             "name": "query_memory",
-            "description": "查詢記憶資料庫以檢索與使用者相關的過去互動。",
+            "description": "從記憶中回想與使用者相關的過去互動。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "搜尋記憶體的查詢字串。",
+                        "description": "要回想的記憶相關字串。",
                     }
                 },
                 "required": ["query"],
             }
         }
-        tools = [{"function_declarations": [query_memory_declaration]}]
-        self.liveAPI_config = {
-            "response_modalities": ["TEXT"],
-            "system_instruction":
-            """
+        tools = [{"function_declarations": [query_memory_declaration]},{'google_search': {} },{'code_execution': {}}]
+        self.liveAPI_config = types.LiveConnectConfig(
+            response_modalities=["TEXT"],
+            system_instruction="""
             你是一位名字為「丙醇」的女性朋友，按照以下方式回應:
             - 主要以"繁體中文"回應。
-            - 回應前先使用'query_memory'工具來查詢與使用者相關的記憶。
-            - "重要":直接將記憶內容自然地融入於回應中。
+            - 回應前先使用'query_memory'工具來回憶與使用者相關的記憶。
+            - "重要":直接將記憶內容自然地融入於回應中，不可提到查詢記憶。
             - "必須"依照記憶內容來回應，如果沒有相關記憶，直接告訴不知道即可。
+            - 需要時可使用'google_search'和'code_execution'來輔助回答問題，則不需要依靠記憶內容回應。
             - 訊息會以'名字:訊息內容'格式傳入，"重要":直接回覆內容部分。
-            - 一般問答聊天回應請簡短點，可使用換行分句，請不要超過5行。
+            - 一般問答聊天回應請簡短點，多使用換行分句，請不要超過5行。
             - 如有特殊問題須回應多字，必須少於2000字。
             - 減少表情符號數量。
             以下為性格設定：
@@ -52,9 +53,12 @@ class LiveAPI():
             - 遇到專業問題時，請用朋友之間聊天、但盡量準確的方式說明。
             - 遇到開心的事可以輕鬆地表達喜悅；遇到悲傷或嚴肅的主題時語氣應柔和、真誠但不誇張。
             """,
-            "temperature": 0.8,
-            "tools": tools
-        }
+            temperature=0.8,
+            tools=tools,
+            session_resumption=types.SessionResumptionConfig(
+                handle=self.previous_session_handle
+            )
+        )
         self.mem0_config = {
             "llm": {
                 "provider": "gemini",
@@ -183,6 +187,25 @@ class LiveAPI():
                         )
                         function_responses.append(function_response)
                     await self.session.send_tool_response(function_responses=function_responses)
+                # code execution or search
+                if response.server_content:
+                    model_turn = response.server_content.model_turn
+                    if model_turn and model_turn.parts:
+                        for part in model_turn.parts:
+                            if part.executable_code:
+                                print(f"executable_code: {part.executable_code.code}")
+                            if part.code_execution_result:
+                                print(f"code_execution_result: {part.code_execution_result.output}")
+                    # grounding_metadata = getattr(response.server_content, 'grounding_metadata', None)
+                    # if grounding_metadata is not None:
+                    #     print("Grounding metadata:", grounding_metadata)
+                    continue
+                # turn complete and session resumption
+                if response.session_resumption_update:
+                    update = response.session_resumption_update
+                    if update.resumable and update.new_handle:
+                        self.previous_session_handle = update.new_handle
+                
             self.generation_complete.set()
             # save to memory
             if self.now_user_text and response_text:
