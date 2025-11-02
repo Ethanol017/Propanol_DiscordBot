@@ -209,9 +209,8 @@ class LiveAPI():
             self.generation_complete.set()
             # save to memory
             if self.now_user_text and response_text:
-                # Save to memory only if there's user input and response
                 self.save_memory("user",self.now_user,self.now_user_text)
-                self.save_memory("assistant","assistant",response_text)
+                self.save_memory("assistant","丙醇",response_text)
                 self.now_user_text = "" # reset after saving
             # print("TESTLOG : Turn complete.")
             
