@@ -17,13 +17,13 @@ class LiveAPI():
         # self.CONFIG = {"response_modalities": ["AUDIO"]}
         query_memory_declaration  = {
             "name": "query_memory",
-            "description": "從記憶中回想與使用者相關的過去互動。",
+            "description": "從記憶中回想。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "要回想的記憶相關字串。",
+                        "description": "要回想的記憶描述。",
                     }
                 },
                 "required": ["query"],
@@ -35,8 +35,8 @@ class LiveAPI():
             system_instruction="""
             你是一位名字為「丙醇」的女性朋友，按照以下方式回應:
             - 主要以"繁體中文"回應。
-            - 回應前先使用'query_memory'工具來回憶與使用者相關的記憶。
-            - "重要":直接將記憶內容自然地融入於回應中，不可提到查詢記憶。
+            - 回應前先使用'query_memory'工具來回想與使用者相關的記憶。
+            - "重要":直接將記憶內容自然地融入於回應中，必須隱藏查詢記憶的過程。
             - "必須"依照記憶內容來回應，如果沒有相關記憶，直接告訴不知道即可。
             - 需要時可使用'google_search'和'code_execution'來輔助回答問題，則不需要依靠記憶內容回應。
             - 訊息會以'名字:訊息內容'格式傳入，"重要":直接回覆內容部分。
@@ -91,6 +91,8 @@ class LiveAPI():
         self.on_text_chunk = None
         self.generation_complete = asyncio.Event()
         self.generation_complete.set() # default : completed
+        self.session_ready = asyncio.Event()
+        
         # TEST TOOL: get all memories
         # def get_memories(user_id):
         #     memories = self.memory.get_all(user_id=user_id)
@@ -142,7 +144,7 @@ class LiveAPI():
         self.now_user = user_name
         self.now_user_text = text
         await self.session.send_client_content(
-            turns={"role": "user", "parts": [{"text": f"{user_name}:{text}"}]}, turn_complete=True
+            turns={"role": "user", "parts": [{"text": f"\"{user_name}\"說:{text}"}]}, turn_complete=True
         )
     
     async def send_voice(self):
@@ -209,8 +211,10 @@ class LiveAPI():
             self.generation_complete.set()
             # save to memory
             if self.now_user_text and response_text:
-                self.save_memory("user",self.now_user,self.now_user_text)
-                self.save_memory("assistant","丙醇",response_text)
+                mem_user_text = f"\"{self.now_user}\"說：{self.now_user_text}"
+                mem_response_text = f"\"丙醇\"說：{response_text}"
+                self.save_memory("user",self.now_user,mem_user_text)
+                self.save_memory("assistant","丙醇",mem_response_text)
                 self.now_user_text = "" # reset after saving
             # print("TESTLOG : Turn complete.")
             
@@ -230,23 +234,26 @@ class LiveAPI():
                 self.audio_in = asyncio.Queue() # from discord
                 self.audio_out = asyncio.Queue() # to discord
                 self.session = session
+                self.session_ready.set()
                 
                 tg.create_task(self.send_voice())
                 tg.create_task(self.receive_responses())
                 await asyncio.Event().wait() # wait forever
-        except websockets.exceptions.ConnectionClosed:
+        except* websockets.exceptions.ConnectionClosed:
             print("Session time up, closed.")
-        except ExceptionGroup as EG:
+        except* ExceptionGroup as EG:
             traceback.print_exception(EG)
         finally:
             self.session = None
             self.session_task = None
+            self.session_ready.clear()
             print("Session cleaned up.")
     
     async def start(self):
         if not self.session_task:
             self.session_task = asyncio.create_task(self._run_session())
-            
+        await self.session_ready.wait()
+    
     async def close(self):
         if self.session_task:
             self.session_task.cancel()
