@@ -8,6 +8,8 @@ from google.genai import types
 from mem0 import Memory
 import websockets
 
+_shared_memory_instance = None
+
 class LiveAPI():
     def __init__(self):
         load_dotenv()
@@ -31,7 +33,7 @@ class LiveAPI():
         }
         tools = [{"function_declarations": [query_memory_declaration]},{'google_search': {} },{'code_execution': {}}]
         self.liveAPI_config = types.LiveConnectConfig(
-            response_modalities=["TEXT"],
+            response_modalities=[types.Modality.TEXT],
             system_instruction="""
             你是一位名字為「丙醇」的女性朋友，按照以下方式回應:
             - 主要以"繁體中文"回應。
@@ -53,11 +55,14 @@ class LiveAPI():
             - 遇到專業問題時，請用朋友之間聊天、但盡量準確的方式說明。
             - 遇到開心的事可以輕鬆地表達喜悅；遇到悲傷或嚴肅的主題時語氣應柔和、真誠但不誇張。
             """,
-            temperature=0.8,
+            temperature=1,
             tools=tools,
             session_resumption=types.SessionResumptionConfig(
                 handle=self.previous_session_handle
-            )
+            ),
+            speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Leda"))),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
+            input_audio_transcription=types.AudioTranscriptionConfig()
         )
         self.mem0_config = {
             "llm": {
@@ -86,12 +91,20 @@ class LiveAPI():
             "history_db_path": "services/LLM/mem0/history.db"
         }
         self.mem_run_id = "chat-bot"
-        self.memory = Memory.from_config(self.mem0_config)
+        global _shared_memory_instance # use singleton pattern for hot reload
+        if _shared_memory_instance is None:
+            _shared_memory_instance = Memory.from_config(self.mem0_config)
+        self.memory = _shared_memory_instance
         self.session_task = None
         self.on_text_chunk = None
         self.generation_complete = asyncio.Event()
         self.generation_complete.set() # default : completed
         self.session_ready = asyncio.Event()
+        self.audio_mode = False
+        self.audio_in = asyncio.Queue()
+        self.audio_out = asyncio.Queue()
+        self.now_user_text = None
+        self.now_user = None
         
         # TEST TOOL: get all memories
         # def get_memories(user_id):
@@ -139,18 +152,26 @@ class LiveAPI():
         msg = {"role": role, "name": name, "content": content}
         self.memory.add([msg], run_id=self.mem_run_id, infer=False)
 
-    async def send_text(self,user_name:str,text:str):
+    async def send_text(self,user_name:str,text:str,is_system = False):
         self.generation_complete.clear()
         self.now_user = user_name
         self.now_user_text = text
-        await self.session.send_client_content(
-            turns={"role": "user", "parts": [{"text": f"\"{user_name}\"說:{text}"}]}, turn_complete=True
-        )
+        if not is_system:
+            await self.session.send_client_content(
+                turns={"role": "user", "parts": [{"text": f"\"{user_name}\"說:{text}"}]}, turn_complete=True
+            )
+        else:
+            await self.session.send_client_content(
+                turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True
+            )
     
     async def send_voice(self):
         while True: # TaskGroup
-            msg = await self.audio_in.get()
-            await self.session.send(input=msg)
+            name,msg = await self.audio_in.get()
+            if name != self.now_user:
+                self.now_user = name
+            # print("Sending audio chunk of length:", len(msg.data))
+            await self.session.send_realtime_input(audio=msg)
 
     async def receive_responses(self):
         while True: # TaskGroup
@@ -158,20 +179,36 @@ class LiveAPI():
             response_text = ""
             async for response in self.session.receive():
                 # print(response.model_dump_json())
-                # audio
-                if response.server_content and response.server_content.model_turn and response.server_content.model_turn.parts and hasattr(response.server_content.model_turn.parts[0], 'data'):
-                    if data := response.server_content.model_turn.parts[0].data:
-                        self.audio_out.put_nowait(data)
-                        continue
-                # text
-                if response.server_content and response.server_content.model_turn and response.server_content.model_turn.parts and hasattr(response.server_content.model_turn.parts[0], 'text'):
-                    if text := response.server_content.model_turn.parts[0].text:
-                        response_text += text
-                        print(text)
-                        if self.on_text_chunk:
-                            # callback of editing message to send text chunk
-                            await self.on_text_chunk(text,is_final=True)
-                        continue
+                if response.server_content:
+                    if response.server_content.model_turn and response.server_content.model_turn.parts:
+                        for part in response.server_content.model_turn.parts:
+                            # 1. Handle Text
+                            if part.text:
+                                text = part.text
+                                response_text += text
+                                print(text)
+                                if self.on_text_chunk:
+                                    await self.on_text_chunk(text, is_final=True)
+                            
+                            # 2. Handle Audio (Inline Data)
+                            if part.inline_data:
+                                data = part.inline_data.data
+                                self.audio_out.put_nowait(data)
+                                # print(f"AUDIO chunk received, {len(data)} bytes")
+
+                            # 3. Handle Code Execution
+                            if part.executable_code:
+                                print(f"executable_code: {part.executable_code.code}")
+                            if part.code_execution_result:
+                                print(f"code_execution_result: {part.code_execution_result.output}")
+                    # audio transcription for memory saving
+                    if response.server_content.output_transcription:
+                        response_text = response.server_content.output_transcription
+                        print("Output transcription:", response_text)
+                    if response.server_content.input_transcription:
+                        self.now_user_text = response.server_content.input_transcription
+                        print("Input transcription:", self.now_user_text)
+                
                 # tool calls (memory)
                 if response.tool_call:
                     # print("TESTLOG : Tool call received:", chunk.tool_call)
@@ -189,19 +226,7 @@ class LiveAPI():
                         )
                         function_responses.append(function_response)
                     await self.session.send_tool_response(function_responses=function_responses)
-                # code execution or search
-                if response.server_content:
-                    model_turn = response.server_content.model_turn
-                    if model_turn and model_turn.parts:
-                        for part in model_turn.parts:
-                            if part.executable_code:
-                                print(f"executable_code: {part.executable_code.code}")
-                            if part.code_execution_result:
-                                print(f"code_execution_result: {part.code_execution_result.output}")
-                    # grounding_metadata = getattr(response.server_content, 'grounding_metadata', None)
-                    # if grounding_metadata is not None:
-                    #     print("Grounding metadata:", grounding_metadata)
-                    continue
+
                 # turn complete and session resumption
                 if response.session_resumption_update:
                     update = response.session_resumption_update
@@ -227,34 +252,51 @@ class LiveAPI():
 
     async def _run_session(self):
         try:
-            async with (
-                self.client.aio.live.connect(model=self.liveAPI_model, config=self.liveAPI_config) as session,
-                asyncio.TaskGroup() as tg,
-            ):
-                self.audio_in = asyncio.Queue() # from discord
-                self.audio_out = asyncio.Queue() # to discord
-                self.session = session
-                self.session_ready.set()
+            try:
+                self.liveAPI_config.response_modalities = [types.Modality.AUDIO] if self.audio_mode else [types.Modality.TEXT]
                 
-                tg.create_task(self.send_voice())
-                tg.create_task(self.receive_responses())
-                await asyncio.Event().wait() # wait forever
-        except* websockets.exceptions.ConnectionClosed:
-            print("Session time up, closed.")
-        except* ExceptionGroup as EG:
-            traceback.print_exception(EG)
+                while not self.audio_in.empty():
+                    self.audio_in.get_nowait()
+                while not self.audio_out.empty():
+                    self.audio_out.get_nowait()
+
+                async with (
+                    self.client.aio.live.connect(model=self.liveAPI_model, config=self.liveAPI_config) as session,
+                    asyncio.TaskGroup() as tg,
+                ):
+                    self.session = session
+                    
+                    tg.create_task(self.send_voice())
+                    tg.create_task(self.receive_responses())
+                    self.session_ready.set()
+                    
+                    await asyncio.Event().wait() # wait forever
+            except* websockets.exceptions.ConnectionClosed:
+                print("Session time up, closed.")
+            except* Exception as EG:
+                traceback.print_exception(EG)
+        except asyncio.CancelledError:
+            pass
         finally:
             self.session = None
             self.session_task = None
             self.session_ready.clear()
             print("Session cleaned up.")
     
-    async def start(self):
+    async def start(self,audio_mode:bool=False):
+        if self.audio_mode != audio_mode:
+            await self.close()
+            self.audio_mode = audio_mode
         if not self.session_task:
+            print("Starting new Live API session.")
             self.session_task = asyncio.create_task(self._run_session())
         await self.session_ready.wait()
     
     async def close(self):
         if self.session_task:
             self.session_task.cancel()
+            try:
+                await self.session_task
+            except asyncio.CancelledError:
+                pass
             self.session_task = None
