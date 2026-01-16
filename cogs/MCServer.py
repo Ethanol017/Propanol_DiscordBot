@@ -16,10 +16,10 @@ class MCServer(commands.GroupCog,name="mc"):
 
 
     def read_output(self,pipe):
-        with open("server_output.log", "w") as f:
+        with open("logs/mc_output.log", "w") as f:
             for line in iter(pipe.readline, ''):
                 if line:
-                    print(line, end='')
+                    # print(line, end='')
                     f.write(line)
                     f.flush()
                 else:
@@ -70,7 +70,7 @@ class MCServer(commands.GroupCog,name="mc"):
             env.update(data["env"])
         try:
             self.server_process = subprocess.Popen(
-                ["bash", data["start_path"]],
+                ["/bin/bash", data["start_path"]],
                 cwd= os.path.dirname(data["start_path"]),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
@@ -91,19 +91,31 @@ class MCServer(commands.GroupCog,name="mc"):
 
     @app_commands.command(name="stop")
     async def stop(self, interaction: discord.Interaction) -> None:
-        if self.server_process is None or self.server_process.poll() is None:
+        if self.server_process is not None and self.server_process.poll() is None:
             await interaction.response.send_message("關閉伺服器中...")
-            self.server_process.stdin.write("stop\n")
-            self.server_process.stdin.flush()
+            try:
+                self.server_process.stdin.write("stop\n")
+                self.server_process.stdin.flush()
+            except Exception as e:
+                print("Error sending stop command:", e)
+                pass
             
-            await asyncio.sleep(15)
-            # self.server_process.wait() # start.sh doesn't stop so can't use wait
-            # self.server_process.terminate() # doesn't work idk why
-            os.killpg(os.getpgid(self.server_process.pid), signal.SIGTERM)
+            await asyncio.sleep(10)
+            
+            try:
+                os.killpg(os.getpgid(self.server_process.pid), signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            except Exception as e:
+                print("Error killing process group:", e)
             self.server_process = None
-            await interaction.followup.send(f"伺服器已關閉")
+            await interaction.edit_original_response(content="伺服器已關閉")
         else:
-            await interaction.response.send_message("伺服器並未啟動")
+            if self.server_process is not None:
+                self.server_process = None
+                await interaction.response.send_message("伺服器先前已意外停止或崩潰")
+            else:
+                await interaction.response.send_message("伺服器並未啟動")
             
     @app_commands.command(name="restart")
     async def restart(self, interaction: discord.Interaction) -> None:
