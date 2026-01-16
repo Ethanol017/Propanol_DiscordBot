@@ -13,6 +13,7 @@ class MCServer(commands.GroupCog,name="mc"):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.server_process = None
+        self.current_running_server = None
 
 
     def read_output(self,pipe):
@@ -49,7 +50,7 @@ class MCServer(commands.GroupCog,name="mc"):
             data = data.get(str(interaction.guild_id), {}).get(server)
             
         if self.server_process is not None and self.server_process.poll() is None:
-            await interaction.response.send_message("丙醇已運行其他伺服器，如果長時間(如一兩天)同樣如此，可能是BUG或忘記關服，聯繫乙醇",ephemeral=True)
+            await interaction.response.send_message(f"已運行伺服器:{self.current_running_server}",ephemeral=True)
             return
         elif data:
             await interaction.response.send_message(f"{server} 伺服器啟動中...")
@@ -80,6 +81,7 @@ class MCServer(commands.GroupCog,name="mc"):
                 env=env,
                 preexec_fn=os.setsid
             )
+            self.current_running_server = server
         except Exception as e:
             await interaction.followup.send(f"伺服器啟動失敗，<@754674664986378301> 錯誤：{e}")
             return
@@ -109,10 +111,13 @@ class MCServer(commands.GroupCog,name="mc"):
             except Exception as e:
                 print("Error killing process group:", e)
             self.server_process = None
+            self.current_running_server = None
+            print("伺服器已關閉")
             await interaction.edit_original_response(content="伺服器已關閉")
         else:
             if self.server_process is not None:
                 self.server_process = None
+                self.current_running_server = None
                 await interaction.response.send_message("伺服器先前已意外停止或崩潰")
             else:
                 await interaction.response.send_message("伺服器並未啟動")
@@ -123,6 +128,14 @@ class MCServer(commands.GroupCog,name="mc"):
         
         await self.stop(interaction)
         await self.start(interaction)
+
+    @app_commands.command(name="status")
+    async def status(self, interaction: discord.Interaction) -> None:
+        if self.server_process is not None and self.server_process.poll() is None:
+            server_name = self.current_running_server if self.current_running_server else "未知伺服器"
+            await interaction.response.send_message(f"目前 {server_name} 伺服器正在運行中",ephemeral=True)
+        else:
+            await interaction.response.send_message("目前沒有伺服器在運行",ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(MCServer(bot))
