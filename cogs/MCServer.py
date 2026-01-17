@@ -9,6 +9,8 @@ from discord import app_commands
 from discord.ext import commands
 import subprocess
 import re
+from mcstatus import JavaServer
+
 class MCServer(commands.GroupCog,name="mc"):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -129,13 +131,71 @@ class MCServer(commands.GroupCog,name="mc"):
         await self.stop(interaction)
         await self.start(interaction)
 
+    def get_server_port(self, server_dir):
+        try:
+            with open(os.path.join(server_dir, "server.properties"), "r", encoding='utf-8') as f:
+                for line in f:
+                    if line.strip().startswith("server-port="):
+                        return int(line.strip().split("=")[1])
+        except Exception:
+            pass
+        return 25565
+
     @app_commands.command(name="status")
     async def status(self, interaction: discord.Interaction) -> None:
         if self.server_process is not None and self.server_process.poll() is None:
             server_name = self.current_running_server if self.current_running_server else "未知伺服器"
-            await interaction.response.send_message(f"目前 {server_name} 伺服器正在運行中",ephemeral=True)
+            
+            # 獲取配置以找到路徑
+            try:
+                with open('data/MCServer.json', 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # 嘗試獲取伺服器配置，如果找不到則使用空字典
+                    guild_data = data.get(str(interaction.guild_id), {})
+                    server_config = guild_data.get(server_name)
+            except Exception as e:
+                print(f"Error reading config: {e}")
+                server_config = None
+
+            if not server_config:
+                await interaction.response.send_message(f"目前 {server_name} 伺服器正在運行，但無法讀取詳細配置。", ephemeral=True)
+                return
+
+            await interaction.response.defer()
+
+            start_path = server_config["start_path"]
+            server_dir = os.path.dirname(start_path)
+            port = self.get_server_port(server_dir)
+            
+            try:
+                server = await JavaServer.async_lookup(f"127.0.0.1:{port}")
+                status = await server.async_status()
+                
+                embed = discord.Embed(title=f"Minecraft Server Status: {server_name}", color=discord.Color.green())
+                embed.add_field(name="狀態", value="🟢 線上 (Online)", inline=True)
+                embed.add_field(name="版本", value=status.version.name, inline=True)
+                embed.add_field(name="人數", value=f"{status.players.online}/{status.players.max}", inline=True)
+                embed.add_field(name="延遲", value=f"{status.latency:.2f}ms", inline=True)
+                
+                if status.players.sample:
+                    player_names = [p.name for p in status.players.sample]
+                    # 避免列表過長
+                    if len(player_names) > 10:
+                        player_str = ", ".join(player_names[:10]) + f" and {len(player_names)-10} more..."
+                    else:
+                        player_str = ", ".join(player_names)
+                    embed.add_field(name="線上玩家", value=player_str, inline=False)
+                
+                await interaction.followup.send(embed=embed)
+                
+            except Exception as e:
+                # print(e)
+                embed = discord.Embed(title=f"Minecraft Server Status: {server_name}", color=discord.Color.orange())
+                embed.add_field(name="狀態", value="🟡 啟動中或無法連線 (Starting/Unreachable)", inline=True)
+                embed.add_field(name="詳細資訊", value=f"進程正在運行 (PID: {self.server_process.pid})，但無法 ping 到伺服器。\n可能正在啟動中。", inline=False)
+                await interaction.followup.send(embed=embed)
         else:
-            await interaction.response.send_message("目前沒有伺服器在運行",ephemeral=True)
+            await interaction.response.send_message("🔴 目前無伺服器啟動", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(MCServer(bot))
